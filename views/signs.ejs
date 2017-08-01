@@ -1,0 +1,51 @@
+<%- include layouts/header.ejs %>
+
+        <div class="page-data">
+         <div class="data-btn">
+           <button onClick="addSign();">+ Add</button>
+         </div>
+         <div class="data-table">
+            <table border="1" cellpadding="7" cellspacing="7">
+                <tr>
+                    <th width="50px">No</th>
+                    <th>Name</th>
+                    <th>Orientation</th>
+                    <th>Latitude</th>
+                    <th>Longitude</th>
+                    <th>City</th>
+                    <th width="120px">Action</th>
+                </tr>
+                               
+                <% if(data.length){ 
+                                
+                 for(var i = 0;i < data.length;i++) { %>
+                 
+                <tr>
+                    <td><%=(i+1)%></td>
+                    <td><%=data[i].signName%></td>
+                    <td><%=data[i].signOrientation%></td>
+                    <td><%=data[i].latitude%></td>
+                    <td><%=data[i].longitude%></td>
+                    <td><%=data[i].city%></td>
+                    <td>
+                        <a class="a-inside edit" href="../signs/edit/<%=data[i].idsigns%>">Edit</a>
+                       
+                        <a class="a-inside delete" href="../signs/delete/<%=data[i].idsigns%>">Delete</a>
+                       
+                    </td>
+                </tr>
+            <% }
+            
+             }else{ %>
+                 <tr>
+                    <td colspan="3">No sign</td>
+                 </tr>
+            <% } %>
+                
+                              
+                
+            </table>
+         </div>
+        </div>
+        
+<%- include layouts/footer.ejs %>
