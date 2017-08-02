@@ -9,60 +9,96 @@ exports.list_signs = function(req, res){
 
   req.getConnection(function(err,connection){
        
-        var query = connection.query('SELECT * FROM signs',function(err,rows)
-        {
+    var query = connection.query('SELECT * FROM signs WHERE city="Portalegre"',function(err,rows)
+    {
+        
+        if(err)
+            console.log("Error Selecting : %s ",err );
+ 
+        res.render('signs',{page_title:"TRAFFIC SIGNS - Node.js",data:rows});
             
-            if(err)
-                console.log("Error Selecting : %s ",err );
-     
-            res.render('signs',{page_title:"TRAFFIC SIGNS - Node.js",data:rows});
-                
-           
-         });
-         
-         //console.log(query.sql);
     });
+
+  });
   
 };
 
 var crg = require('city-reverse-geocoder');
 
-function meanCoordinates(newLat, newLon) {
-    lat = (lat + newLat)/2;
-    lon = (lon + newLon)/2;
+/*****************************************************
+ *                   Update Policy 1                 *
+ *****************************************************/
+
+function updatePolicy_1(connection, actualCity, res){
+
+	var results;
+
+    var select = connection.query('SELECT * FROM signs WHERE city=?', [actualCity], function(err,rows)
+    {
+        
+        if(err)
+            console.log("Error Selecting : %s ",err );
+
+        results = JSON.stringify(rows);
+
+        results = JSON.parse(results);
+
+        insertOrUpdate(connection, 41.5759, -7.9822, results, res);
+
+        res.render('signs',{page_title:"TRAFFIC SIGNS - Node.js",data:rows});
+       
+    });
+
 }
 
-function pointInCircle(point, radius, center){ 
-    return (google.maps.geometry.spherical.computeDistanceBetween(point, center) <= radius)
+/*****************************************************
+ *           Update sign coordinates by ID           *  
+ *****************************************************/
+
+function updateSign(connection, lat, lng, id){
+	connection.query("UPDATE signs set latitude=?,longitude=? WHERE idsigns = ? ",[lat,lng,id], function(err, rows)
+    {
+
+      if (err)
+          console.log("Error Updating : %s ",err );
+     
+    });
 }
 
-var counter = 0;
+/*****************************************************
+ *    Decide if executes an Insert or Update query   *
+ *****************************************************/
+ 
+function insertOrUpdate(connection, latFrom, lngFrom, results, res){
 
-var InsertQuery = require('mysql-insert-multiple');
+	var GeoPoint = require('geopoint'),
+    pointFrom = new GeoPoint(latFrom, lngFrom);
 
-/*Save the customer*/
-exports.add_sign = function(req,res){
+    var pointTo;
 
-    //console.log(req.body);
+    var insertValues = [];
+    var updateValues = [];
+    var newLat;
+    var newLng;
 
-    var jsonData = req.body;
+    for(var i=0; i<results.length; i++){
+    	newLat = parseFloat(results[i].latitude);
+    	newLng = parseFloat(results[i].longitude);
+    	pointTo = new GeoPoint(newLat, newLng);
+    	var distance = pointFrom.distanceTo(pointTo, true);
 
-    
-    //var jsonString = JSON.stringify( req.body );
-    //console.log(jsonString);
-    
-    req.getConnection(function (err, connection) {
+    	if(distance < 0.005){
+    		console.log(distance + " kilometers");
+    		newLat = (latFrom + newLat)/2;
+    		newLng = (lngFrom + newLng)/2;
+    		updateSign(connection, newLat, newLng, results[i].idsigns);
+    	}
+    	else{
+    		var index = results[i];
 
-        var N = jsonData.length; 
-        var values = [];
-
-        for (var i = 0; i < N; i++) {
-            var index = jsonData[i];
-            //console.log(index);
-
-            var results = crg(index.latitude, index.longitude);
+            var location = crg(index.latitude, index.longitude);
             
-            var city = results[0].region;
+            var city = location[0].region;
 
             var data = [    
                 index.latitude,
@@ -72,66 +108,39 @@ exports.add_sign = function(req,res){
                 city
             ];
 
-            //console.log(data);
-
-            values.push(data);
-            
-            /*var query = connection.query("INSERT INTO signs set ? ",data, function(err, rows)
-            {
-      
-              if (err)
-                  console.log("Error inserting : %s ",err );
-             
-              //res.redirect('/');
-              
-            });*/
-
-            counter++
-        }
-
-        /*values = [
-	        ["39.93631600342309","-8.237951709634846","Stop","2.360569"],
-	        ["41.33151873502948","-8.748333882816908","Stop","1.4045537"],
-	        ["41.24428728126322","-7.975176099657752","Stop","1.1400907"]
-	        ];*/
-
-	    console.log(values);
-
-        var sql = "INSERT INTO signs (latitude, longitude, signName, signOrientation, city) VALUES ? "
-        var query = connection.query(sql, [values], function(err, rows)
-            {
-      
-              if (err)
-                  console.log("Error inserting : %s ",err );
-             
-              //res.redirect('/');
-              
-            });
-
-        res.redirect('/');
-        //console.log(values);
-        console.log(counter);
-        
-       // console.log(query.sql); get raw query
-    
-    });
-};
-
-/*async.mapSeries(allNames, (data, callback) => {
-    connection.query('INSERT INTO names (firstname, lastname) VALUES ?', [data.firstName, data.firstName], (err, result) => {
-        if (err) {
-            console.error('error: ' + err.stack);
-            callback(err);
-        } else {
-            callback(null, result);
-        }
-    });
-}, (err, results) => {
-    // Final callback
-    if (err) {
-        console.log(`Error: ${err}`);
+    		insertValues.push(results[i]);
+    	}
     }
-});*/
+
+    var sql = "INSERT INTO signs (latitude, longitude, signName, signOrientation, city) VALUES ? "
+    var query = connection.query(sql, [insertValues], function(err, rows)
+    {
+
+      if (err)
+          console.log("Error inserting : %s ",err );
+     
+      res.redirect('/');
+      
+    });
+}
+
+var counter = 0;
+
+/*Save the customer*/
+exports.add_sign = function(req,res){
+
+    //console.log(req.body);
+
+    var jsonData = req.body;
+    
+    req.getConnection(function (err, connection) {
+
+    	var location = crg(jsonData[0].latitude, jsonData[0].longitude);
+
+    	updatePolicy_1(connection, location[0].region, res);
+	
+	});
+};
 
 exports.edit_sign = function(req,res){
     
