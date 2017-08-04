@@ -29,7 +29,7 @@ var crg = require('city-reverse-geocoder');
  *                   Update Policy 1                 *
  *****************************************************/
 
-function updatePolicy_1(connection, actualCity, res){
+function updatePolicy_1(connection, data, actualCity, res){
 
 	var results;
 
@@ -43,7 +43,8 @@ function updatePolicy_1(connection, actualCity, res){
 
         results = JSON.parse(results);
 
-        insertOrUpdate(connection, 41.5759, -7.9822, results, res);
+
+        insertOrUpdate(connection, data, results, res);
 
         res.render('signs',{page_title:"TRAFFIC SIGNS - Node.js",data:rows});
        
@@ -69,38 +70,53 @@ function updateSign(connection, lat, lng, id){
  *    Decide if executes an Insert or Update query   *
  *****************************************************/
  
-function insertOrUpdate(connection, latFrom, lngFrom, results, res){
-
-	var GeoPoint = require('geopoint'),
-    pointFrom = new GeoPoint(latFrom, lngFrom);
-
+function insertOrUpdate(connection, data, results, res){
     var pointTo;
 
     var insertValues = [];
     var updateValues = [];
     var newLat;
     var newLng;
+    var Lat;
+    var Lng;
+    var flag = 0;
 
-    for(var i=0; i<results.length; i++){
-    	newLat = parseFloat(results[i].latitude);
-    	newLng = parseFloat(results[i].longitude);
-    	pointTo = new GeoPoint(newLat, newLng);
-    	var distance = pointFrom.distanceTo(pointTo, true);
+    for(var j=0; j<data.length; j++){
+    	//Create point for each item from data array 
+		newLat = parseFloat(data[j].latitude);
+    	newLng = parseFloat(data[j].longitude);
+		var GeoPoint = require('geopoint'),
+		pointFrom = new GeoPoint(newLat, newLng);
 
-    	if(distance < 0.005){
-    		console.log(distance + " kilometers");
-    		newLat = (latFrom + newLat)/2;
-    		newLng = (lngFrom + newLng)/2;
-    		updateSign(connection, newLat, newLng, results[i].idsigns);
-    	}
-    	else{
-    		var index = results[i];
+    	//Verify each item for all signs in the repository (by city)
+	    for(var i=0; i<results.length && flag == 0; i++){
+	    	Lat = parseFloat(results[i].latitude);
+	    	Lng = parseFloat(results[i].longitude);
+	    	pointTo = new GeoPoint(Lat, Lng);
+	    	var distance = pointFrom.distanceTo(pointTo, true);
+	    	console.log(distance + " kilometers");
+
+	    	//If lower than 5 meters, sign is updated in the repository
+	    	if(distance < 0.005){
+	    		//console.log(distance + " kilometers");
+	    		newLat = (Lat + newLat)/2;
+	    		newLng = (Lng + newLng)/2;
+	    		updateSign(connection, newLat, newLng, results[i].idsigns);
+	    		flag = 1;
+	    		console.log("ATUALIZOU SINAL!\n");
+	    	}
+	    //Else a new sign is insert
+	    }
+	    if(flag == 0){
+    		var index = data[j];
+
+    		console.log(index);
 
             var location = crg(index.latitude, index.longitude);
             
             var city = location[0].region;
 
-            var data = [    
+            var newSign = [    
                 index.latitude,
                 index.longitude,
                 index.name,
@@ -108,20 +124,28 @@ function insertOrUpdate(connection, latFrom, lngFrom, results, res){
                 city
             ];
 
-    		insertValues.push(results[i]);
-    	}
+    		insertValues.push(newSign);
+    		console.log("INSERIU SINAL!\n");
+    	}    	
+	    
     }
 
-    var sql = "INSERT INTO signs (latitude, longitude, signName, signOrientation, city) VALUES ? "
-    var query = connection.query(sql, [insertValues], function(err, rows)
-    {
+    if(insertValues.length != 0){
+   		console.log("SIZE: " + insertValues.length);
 
-      if (err)
-          console.log("Error inserting : %s ",err );
-     
-      res.redirect('/');
-      
-    });
+	    var sql = "INSERT INTO signs (latitude, longitude, signName, signOrientation, city) VALUES ? "
+	    var query = connection.query(sql, [insertValues], function(err, rows)
+	    {
+
+	      if (err){
+	          console.log("Error inserting : %s ",err );
+	      }
+	      
+	    });
+	} 
+	else{
+		console.log("SIZE: " + insertValues.length);
+	}
 }
 
 var counter = 0;
@@ -137,7 +161,7 @@ exports.add_sign = function(req,res){
 
     	var location = crg(jsonData[0].latitude, jsonData[0].longitude);
 
-    	updatePolicy_1(connection, location[0].region, res);
+    	updatePolicy_1(connection, jsonData, location[0].region, res);
 	
 	});
 };
