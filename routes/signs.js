@@ -9,7 +9,7 @@ exports.list_signs = function(req, res){
 
   req.getConnection(function(err,connection){
        
-    var query = connection.query('SELECT * FROM signs WHERE city="Portalegre"',function(err,rows)
+    var query = connection.query('SELECT * FROM signs',function(err,rows)
     {
         
         if(err)
@@ -33,7 +33,9 @@ function updatePolicy_1(connection, data, actualCity, res){
 
 	var results;
 
-    var select = connection.query('SELECT * FROM signs WHERE city=?', [actualCity], function(err,rows)
+	console.log(actualCity);
+
+    var select = connection.query("SELECT * FROM signs WHERE city = ?", [actualCity] ,function(err,rows)
     {
         
         if(err)
@@ -43,10 +45,9 @@ function updatePolicy_1(connection, data, actualCity, res){
 
         results = JSON.parse(results);
 
-
         insertOrUpdate(connection, data, results, res);
 
-        res.render('signs',{page_title:"TRAFFIC SIGNS - Node.js",data:rows});
+        res.redirect('/');
        
     });
 
@@ -81,7 +82,12 @@ function insertOrUpdate(connection, data, results, res){
     var Lng;
     var flag = 0;
 
-    for(var j=0; j<data.length; j++){
+    var data_N = data.length;
+    var results_N = results.length;
+
+    console.log(results_N);
+
+    for(var j=0; j<data_N; j++){
     	//Create point for each item from data array 
 		newLat = parseFloat(data[j].latitude);
     	newLng = parseFloat(data[j].longitude);
@@ -89,28 +95,28 @@ function insertOrUpdate(connection, data, results, res){
 		pointFrom = new GeoPoint(newLat, newLng);
 
     	//Verify each item for all signs in the repository (by city)
-	    for(var i=0; i<results.length && flag == 0; i++){
+	    for(var i=0; i<results_N && flag == 0; i++){
 	    	Lat = parseFloat(results[i].latitude);
 	    	Lng = parseFloat(results[i].longitude);
 	    	pointTo = new GeoPoint(Lat, Lng);
 	    	var distance = pointFrom.distanceTo(pointTo, true);
-	    	console.log(distance + " kilometers");
-
+	    	
 	    	//If lower than 5 meters, sign is updated in the repository
 	    	if(distance < 0.005){
-	    		//console.log(distance + " kilometers");
+	    		console.log("\nDISTANCE: " + distance + " kilometers\n");
 	    		newLat = (Lat + newLat)/2;
 	    		newLng = (Lng + newLng)/2;
 	    		updateSign(connection, newLat, newLng, results[i].idsigns);
 	    		flag = 1;
-	    		console.log("ATUALIZOU SINAL!\n");
+	    		console.log("-------------------");
+	    		console.log("SIGN " + results[i].idsigns + " UPDATED!");
+	    		console.log("-------------------\n");
 	    	}
+
 	    //Else a new sign is insert
 	    }
 	    if(flag == 0){
     		var index = data[j];
-
-    		console.log(index);
 
             var location = crg(index.latitude, index.longitude);
             
@@ -125,9 +131,12 @@ function insertOrUpdate(connection, data, results, res){
             ];
 
     		insertValues.push(newSign);
-    		console.log("INSERIU SINAL!\n");
-    	}    	
-	    
+    		console.log("------------------");
+    		console.log("NEW SIGN INSERTED!");
+    		console.log("------------------\n");
+    	}    
+
+    	flag = 0;	    
     }
 
     if(insertValues.length != 0){
@@ -160,6 +169,8 @@ exports.add_sign = function(req,res){
     req.getConnection(function (err, connection) {
 
     	var location = crg(jsonData[0].latitude, jsonData[0].longitude);
+
+    	console.log(location);
 
     	updatePolicy_1(connection, jsonData, location[0].region, res);
 	
