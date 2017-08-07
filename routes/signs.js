@@ -78,21 +78,25 @@ function insertOrUpdate(connection, data, results, res){
     var updateValues = [];
     var newLat;
     var newLng;
+    var actLat;
+    var actLng;
     var Lat;
     var Lng;
+    var signName;
     var flag = 0;
 
     var data_N = data.length;
     var results_N = results.length;
 
-    console.log(results_N);
+    console.log(data[0]);
 
     for(var j=0; j<data_N; j++){
     	//Create point for each item from data array 
-		newLat = parseFloat(data[j].latitude);
-    	newLng = parseFloat(data[j].longitude);
+		actLat = parseFloat(data[j].latitude);
+    	actLng = parseFloat(data[j].longitude);
 		var GeoPoint = require('geopoint'),
-		pointFrom = new GeoPoint(newLat, newLng);
+		pointFrom = new GeoPoint(actLat, actLng);
+		signName = data[j].name;
 
     	//Verify each item for all signs in the repository (by city)
 	    for(var i=0; i<results_N && flag == 0; i++){
@@ -102,10 +106,11 @@ function insertOrUpdate(connection, data, results, res){
 	    	var distance = pointFrom.distanceTo(pointTo, true);
 	    	
 	    	//If lower than 5 meters, sign is updated in the repository
-	    	if(distance < 0.005){
+	    	//console.log(results[i]);
+	    	if(distance < 0.005 && signName === results[i].signName){
 	    		console.log("\nDISTANCE: " + distance + " kilometers\n");
-	    		newLat = (Lat + newLat)/2;
-	    		newLng = (Lng + newLng)/2;
+	    		newLat = (Lat + actLat)/2;
+	    		newLng = (Lng + actLng)/2;
 	    		updateSign(connection, newLat, newLng, results[i].idsigns);
 	    		flag = 1;
 	    		console.log("-------------------");
@@ -113,7 +118,7 @@ function insertOrUpdate(connection, data, results, res){
 	    		console.log("-------------------\n");
 	    	}
 
-	    //Else a new sign is insert
+	    //Else a new sign is inserted
 	    }
 	    if(flag == 0){
     		var index = data[j];
@@ -131,9 +136,9 @@ function insertOrUpdate(connection, data, results, res){
             ];
 
     		insertValues.push(newSign);
-    		console.log("------------------");
-    		console.log("NEW SIGN INSERTED!");
-    		console.log("------------------\n");
+    		//console.log("------------------");
+    		//console.log("NEW SIGN INSERTED!");
+    		//console.log("------------------\n");
     	}    
 
     	flag = 0;	    
