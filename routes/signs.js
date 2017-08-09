@@ -2,14 +2,16 @@
  * GET users listing.
  */
 
-
-//'SELECT latitude, longitude, ( 3959 * acos( cos( radians(37) ) * cos( radians( lat ) ) * cos( radians( long ) - radians(-122) ) + sin( radians(37) ) * sin(radians(lat)) ) ) AS distance FROM myTable HAVING distance < 50 ORDER BY distance'
+var sqlQuery = "SELECT * FROM mainsigns WHERE acos(sin(? * 0.0175) * sin(latitude * 0.0175) + cos(? * 0.0175) * cos(latitude * 0.0175) * cos(longitude * 0.0175 - (? * 0.0175))) * 6371 <= 30";
 
 exports.list_signs = function(req, res){
 
   req.getConnection(function(err,connection){
+
+  	var data_latitude = 41.5624;
+	var data_longitude = -8.39234;
        
-    var query = connection.query('SELECT * FROM signs',function(err,rows)
+    var query = connection.query(sqlQuery, [data_latitude, data_latitude, data_longitude], function(err,rows)
     {
         
         if(err)
@@ -29,13 +31,14 @@ var crg = require('city-reverse-geocoder');
  *                   Update Policy 1                 *
  *****************************************************/
 
-function updatePolicy_1(connection, data, actualCity, res){
+function updatePolicy_1(connection, data, res){
 
 	var results;
 
-	console.log(actualCity);
+	var data_latitude = data[0].latitude;
+	var data_longitude = data[0].longitude;
 
-    var select = connection.query("SELECT * FROM signs WHERE city = ?", [actualCity] ,function(err,rows)
+    var select = connection.query(sqlQuery, [data_latitude, data_latitude, data_longitude], function(err,rows)
     {
         
         if(err)
@@ -44,6 +47,8 @@ function updatePolicy_1(connection, data, actualCity, res){
         results = JSON.stringify(rows);
 
         results = JSON.parse(results);
+
+        console.log(results.length);
 
         insertOrUpdate(connection, data, results, res);
 
@@ -57,14 +62,73 @@ function updatePolicy_1(connection, data, actualCity, res){
  *           Update sign coordinates by ID           *  
  *****************************************************/
 
-function updateSign(connection, lat, lng, id){
-	connection.query("UPDATE signs set latitude=?,longitude=? WHERE idsigns = ? ",[lat,lng,id], function(err, rows)
+function updateSign(connection, lat, lng, id, bool){
+	var sqlQuery;
+	if(true){
+		sqlQuery = "UPDATE mainsigns set latitude=?,longitude=?,"+
+		"reportCount = reportCount + 1, confidenceLevel = confidenceLevel + 0.01"+
+		" WHERE signID = ? "
+	}
+	else{
+		sqlQuery = "UPDATE mainsigns set latitude=?,longitude=?,"+
+		"confidenceLevel = confidenceLevel - 0.01"+
+		" WHERE signID = ? "
+	}
+
+	connection.query(sqlQuery,[lat,lng,id], function(err, rows)
     {
 
       if (err)
           console.log("Error Updating : %s ",err );
      
     });
+}
+
+function insertExtraSign(connection, data){
+	connection.query("INSERT INTO extrasigns(extraSignName, extraDate, mainSignID) VALUES ?", 
+		[data], function(err, rows)
+    {
+
+      if (err)
+          console.log("Error Inserting : %s ",err );
+     
+    });
+}
+
+function toRadians(degrees) {
+  return degrees * Math.PI / 180;
+}
+
+//Haversine
+function Haversine(lat1, lon1, lat2, lon2){
+	var R = 6371e3; // in metres
+
+	var φ1 = toRadians(lat1);
+	var φ2 = toRadians(lat2);
+	var Δφ = toRadians((lat2-lat1));
+	var Δλ = toRadians((lon2-lon1));
+
+	var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+	        Math.cos(φ1) * Math.cos(φ2) *
+	        Math.sin(Δλ/2) * Math.sin(Δλ/2);
+	var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+	var distance = R * c;
+
+	return distance;
+}
+
+//Spherical Law of Cosines
+function Spherical_Law_of_Cosines(lat1, lon1, lat2, lon2){
+	var R = 6371e3; // in metres
+
+	var φ1 = toRadians(lat1);
+	var φ2 = toRadians(lat2);
+	var Δλ = toRadians((lon2-lon1)); 
+
+	var distance = Math.acos( Math.sin(φ1)*Math.sin(φ2) + Math.cos(φ1)*Math.cos(φ2) * Math.cos(Δλ) ) * R;
+
+	return distance;
 }
 
 /*****************************************************
@@ -94,28 +158,43 @@ function insertOrUpdate(connection, data, results, res){
     	//Create point for each item from data array 
 		actLat = parseFloat(data[j].latitude);
     	actLng = parseFloat(data[j].longitude);
-		var GeoPoint = require('geopoint'),
-		pointFrom = new GeoPoint(actLat, actLng);
 		signName = data[j].name;
 
     	//Verify each item for all signs in the repository (by city)
 	    for(var i=0; i<results_N && flag == 0; i++){
 	    	Lat = parseFloat(results[i].latitude);
 	    	Lng = parseFloat(results[i].longitude);
-	    	pointTo = new GeoPoint(Lat, Lng);
-	    	var distance = pointFrom.distanceTo(pointTo, true);
+	    	var distance = Haversine(actLat, actLng, Lat, Lng);
 	    	
 	    	//If lower than 5 meters, sign is updated in the repository
-	    	//console.log(results[i]);
-	    	if(distance < 0.005 && signName === results[i].signName){
-	    		console.log("\nDISTANCE: " + distance + " kilometers\n");
+	    	if(distance < 5){
+	    		if(signName === results[i].signName){
+	    		console.log("\nDISTANCE: " + distance + " meters\n");
 	    		newLat = (Lat + actLat)/2;
 	    		newLng = (Lng + actLng)/2;
-	    		updateSign(connection, newLat, newLng, results[i].idsigns);
-	    		flag = 1;
+	    		updateSign(connection, newLat, newLng, results[i].signID, true);
 	    		console.log("-------------------");
-	    		console.log("SIGN " + results[i].idsigns + " UPDATED!");
+	    		console.log("SIGN " + results[i].signID + " UPDATED!");
 	    		console.log("-------------------\n");
+	    		}
+	    		else{
+	    			newLat = (Lat + actLat)/2;
+	    			newLng = (Lng + actLng)/2;
+
+		    		var created2 = new Date();
+
+		            var extraSign = [  
+		                signName,
+		                created2, 
+		                results[i].signID
+		            ];
+
+		            console.log(extraSign);
+
+	    			insertExtraSign(connection, extraSign);
+	    			//updateSign(connection, newLat, newLng, results[i].signID, false);
+	    		}
+	    		flag = 1;
 	    	}
 
 	    //Else a new sign is inserted
@@ -123,22 +202,23 @@ function insertOrUpdate(connection, data, results, res){
 	    if(flag == 0){
     		var index = data[j];
 
-            var location = crg(index.latitude, index.longitude);
-            
-            var city = location[0].region;
+    		var created = new Date();
 
             var newSign = [    
                 index.latitude,
                 index.longitude,
                 index.name,
                 index.orientation,
-                city
+                0.5,
+                1,
+                created,
+                "OK"
             ];
 
     		insertValues.push(newSign);
-    		//console.log("------------------");
-    		//console.log("NEW SIGN INSERTED!");
-    		//console.log("------------------\n");
+    		console.log("------------------");
+    		console.log("NEW SIGN INSERTED!");
+    		console.log("------------------\n");
     	}    
 
     	flag = 0;	    
@@ -147,7 +227,9 @@ function insertOrUpdate(connection, data, results, res){
     if(insertValues.length != 0){
    		console.log("SIZE: " + insertValues.length);
 
-	    var sql = "INSERT INTO signs (latitude, longitude, signName, signOrientation, city) VALUES ? "
+   		console.log(insertValues);
+
+	    /*var sql = "INSERT INTO mainsigns (latitude, longitude, signName, orientation, confidenceLevel, reportCount, date, status) VALUES ? "
 	    var query = connection.query(sql, [insertValues], function(err, rows)
 	    {
 
@@ -155,7 +237,7 @@ function insertOrUpdate(connection, data, results, res){
 	          console.log("Error inserting : %s ",err );
 	      }
 	      
-	    });
+	    });*/
 	} 
 	else{
 		console.log("SIZE: " + insertValues.length);
@@ -164,7 +246,7 @@ function insertOrUpdate(connection, data, results, res){
 
 var counter = 0;
 
-/*Save the customer*/
+/*Save sign*/
 exports.add_sign = function(req,res){
 
     //console.log(req.body);
@@ -173,11 +255,7 @@ exports.add_sign = function(req,res){
     
     req.getConnection(function (err, connection) {
 
-    	var location = crg(jsonData[0].latitude, jsonData[0].longitude);
-
-    	console.log(location);
-
-    	updatePolicy_1(connection, jsonData, location[0].region, res);
+    	updatePolicy_1(connection, jsonData, res);
 	
 	});
 };
@@ -196,7 +274,7 @@ exports.edit_sign = function(req,res){
             longitude   : input.longitude
         };
         
-        connection.query("UPDATE signs set ? WHERE id = ? ",[data,id], function(err, rows)
+        connection.query("UPDATE mainsigns set ? WHERE id = ? ",[data,id], function(err, rows)
         {
   
           if (err)
@@ -216,7 +294,7 @@ exports.delete_sign = function(req,res){
     
      req.getConnection(function (err, connection) {
         
-        connection.query("DELETE FROM signs  WHERE id = ? ",[id], function(err, rows)
+        connection.query("DELETE FROM mainsigns  WHERE id = ? ",[id], function(err, rows)
         {
             
              if(err)

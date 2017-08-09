@@ -12,7 +12,10 @@
                     <th>Orientation</th>
                     <th>Latitude</th>
                     <th>Longitude</th>
-                    <th>City</th>
+                    <th>Confidence Level</th>
+                    <th>Report Count</th>
+                    <th>Date</th>
+                    <th>Status</th>
                     <th width="120px">Action</th>
                 </tr>
                                
@@ -23,10 +26,13 @@
                 <tr>
                     <td><%=(i+1)%></td>
                     <td><%=data[i].signName%></td>
-                    <td><%=data[i].signOrientation%></td>
+                    <td><%=data[i].orientation%></td>
                     <td><%=data[i].latitude%></td>
                     <td><%=data[i].longitude%></td>
-                    <td><%=data[i].city%></td>
+                    <td><%=data[i].confidenceLevel%></td>
+                    <td><%=data[i].reportCount%></td>
+                    <td><%=data[i].date%></td>
+                    <td><%=data[i].status%></td>
                     <td>
                         <a class="a-inside edit" href="../signs/edit/<%=data[i].idsigns%>">Edit</a>
                        
