@@ -56,6 +56,7 @@ app.use(
 app.get('/', routes.index);
 
 app.get('/signs', signs.list_signs);
+app.get('/extrasigns/:id', signs.list_extrasigns);
 app.post('/signs/add', signs.add_sign);
 app.delete('/signs/delete/:id', signs.delete_sign);
 app.post('/signs/edit/:id',signs.edit_sign);

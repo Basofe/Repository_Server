@@ -25,10 +25,30 @@ exports.list_signs = function(req, res){
   
 };
 
+exports.list_extrasigns = function(req, res){
+
+  var id = req.params.id;
+
+  req.getConnection(function(err,connection){
+       
+    var query = connection.query("SELECT * FROM extrasigns WHERE mainSignID = ?", [id], function(err,rows)
+    {
+        
+        if(err)
+            console.log("Error Selecting : %s ",err );
+ 
+        res.render('extrasigns',{page_title:"TRAFFIC SIGNS - Node.js",data:rows});
+            
+    });
+
+  });
+  
+};
+
 var crg = require('city-reverse-geocoder');
 
 /*****************************************************
- *                   Update Policy 1                 *
+ *                  Update Policy 1                  *
  *****************************************************/
 
 function updatePolicy_1(connection, data, res){
@@ -48,8 +68,6 @@ function updatePolicy_1(connection, data, res){
 
         results = JSON.parse(results);
 
-        console.log(results.length);
-
         insertOrUpdate(connection, data, results, res);
 
         res.redirect('/');
@@ -59,20 +77,21 @@ function updatePolicy_1(connection, data, res){
 }
 
 /*****************************************************
- *           Update sign coordinates by ID           *  
+ *                 Update sign by ID                 *  
  *****************************************************/
 
 function updateSign(connection, lat, lng, id, bool){
 	var sqlQuery;
-	if(true){
+
+	if(bool){
 		sqlQuery = "UPDATE mainsigns set latitude=?,longitude=?,"+
 		"reportCount = reportCount + 1, confidenceLevel = confidenceLevel + 0.01"+
-		" WHERE signID = ? "
+		" WHERE signID = ? ";
 	}
 	else{
 		sqlQuery = "UPDATE mainsigns set latitude=?,longitude=?,"+
 		"confidenceLevel = confidenceLevel - 0.01"+
-		" WHERE signID = ? "
+		" WHERE signID = ? ";
 	}
 
 	connection.query(sqlQuery,[lat,lng,id], function(err, rows)
@@ -85,8 +104,9 @@ function updateSign(connection, lat, lng, id, bool){
 }
 
 function insertExtraSign(connection, data){
-	connection.query("INSERT INTO extrasigns(extraSignName, extraDate, mainSignID) VALUES ?", 
-		[data], function(err, rows)
+	var sql = "INSERT INTO extrasigns (extraSignName, extraDate, extraReportCount, mainSignID) VALUES ? ON DUPLICATE KEY UPDATE extraReportCount=extraReportCount+1";
+
+	connection.query(sql,[data], function(err, rows)
     {
 
       if (err)
@@ -139,6 +159,7 @@ function insertOrUpdate(connection, data, results, res){
     var pointTo;
 
     var insertValues = [];
+    var extraValues = [];
     var updateValues = [];
     var newLat;
     var newLng;
@@ -152,31 +173,31 @@ function insertOrUpdate(connection, data, results, res){
     var data_N = data.length;
     var results_N = results.length;
 
-    console.log(data[0]);
-
     for(var j=0; j<data_N; j++){
     	//Create point for each item from data array 
 		actLat = parseFloat(data[j].latitude);
     	actLng = parseFloat(data[j].longitude);
 		signName = data[j].name;
 
-    	//Verify each item for all signs in the repository (by city)
+    	//Verify each item for all signs in the repository (in a certain area)
 	    for(var i=0; i<results_N && flag == 0; i++){
 	    	Lat = parseFloat(results[i].latitude);
 	    	Lng = parseFloat(results[i].longitude);
 	    	var distance = Haversine(actLat, actLng, Lat, Lng);
 	    	
-	    	//If lower than 5 meters, sign is updated in the repository
+	    	//If lower than 5 meters,...
 	    	if(distance < 5){
+	    		//...  sign is updated in the repository
 	    		if(signName === results[i].signName){
-	    		console.log("\nDISTANCE: " + distance + " meters\n");
-	    		newLat = (Lat + actLat)/2;
-	    		newLng = (Lng + actLng)/2;
-	    		updateSign(connection, newLat, newLng, results[i].signID, true);
-	    		console.log("-------------------");
-	    		console.log("SIGN " + results[i].signID + " UPDATED!");
-	    		console.log("-------------------\n");
+		    		console.log("\nDISTANCE: " + distance + " meters\n");
+		    		newLat = (Lat + actLat)/2;
+		    		newLng = (Lng + actLng)/2;
+		    		updateSign(connection, newLat, newLng, results[i].signID, true);
+		    		console.log("-------------------");
+		    		console.log("SIGN " + results[i].signID + " UPDATED!");
+		    		console.log("-------------------\n");
 	    		}
+	    		//... extra sign is inserted or updated in the repository
 	    		else{
 	    			newLat = (Lat + actLat)/2;
 	    			newLng = (Lng + actLng)/2;
@@ -185,15 +206,22 @@ function insertOrUpdate(connection, data, results, res){
 
 		            var extraSign = [  
 		                signName,
-		                created2, 
+		                created2,
+		                1,
 		                results[i].signID
 		            ];
 
-		            console.log(extraSign);
+		            extraValues.push(extraSign);
 
-	    			insertExtraSign(connection, extraSign);
-	    			//updateSign(connection, newLat, newLng, results[i].signID, false);
+	    			insertExtraSign(connection, extraValues);
+	    			updateSign(connection, newLat, newLng, results[i].signID, false);
+	    			extraValues.pop();
+
+	    			console.log("----------------------");
+		    		console.log("EXTRA SIGN " + results[i].signID + " INSERTED!");
+		    		console.log("----------------------\n");
 	    		}
+
 	    		flag = 1;
 	    	}
 
@@ -227,9 +255,7 @@ function insertOrUpdate(connection, data, results, res){
     if(insertValues.length != 0){
    		console.log("SIZE: " + insertValues.length);
 
-   		console.log(insertValues);
-
-	    /*var sql = "INSERT INTO mainsigns (latitude, longitude, signName, orientation, confidenceLevel, reportCount, date, status) VALUES ? "
+	    var sql = "INSERT INTO mainsigns (latitude, longitude, signName, orientation, confidenceLevel, reportCount, date, status) VALUES ? ";
 	    var query = connection.query(sql, [insertValues], function(err, rows)
 	    {
 
@@ -237,7 +263,7 @@ function insertOrUpdate(connection, data, results, res){
 	          console.log("Error inserting : %s ",err );
 	      }
 	      
-	    });*/
+	    });
 	} 
 	else{
 		console.log("SIZE: " + insertValues.length);

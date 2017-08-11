@@ -9,14 +9,8 @@
                 <tr>
                     <th width="50px">No</th>
                     <th>Name</th>
-                    <th>Orientation</th>
-                    <th>Latitude</th>
-                    <th>Longitude</th>
-                    <th>Confidence Level</th>
                     <th>Report Count</th>
                     <th>Date</th>
-                    <th>Status</th>
-                    <th width="120px">Action</th>
                 </tr>
                                
                 <% if(data.length){ 
@@ -25,18 +19,9 @@
                  
                 <tr>
                     <td><%=(i+1)%></td>
-                    <td><%=data[i].signName%></td>
-                    <td><%=data[i].orientation%></td>
-                    <td><%=data[i].latitude%></td>
-                    <td><%=data[i].longitude%></td>
-                    <td><%=data[i].confidenceLevel%></td>
-                    <td><%=data[i].reportCount%></td>
-                    <td><%=data[i].date%></td>
-                    <td><%=data[i].status%></td>
-                    <td>
-                        <a class="a-inside edit" href="../extraSigns/<%=data[i].signID%>">Extra Signs</a>
-                       
-                    </td>
+                    <td><%=data[i].extraSignName%></td>
+                    <td><%=data[i].extraReportCount%></td>
+                    <td><%=data[i].extraDate%></td>
                 </tr>
             <% }
             
