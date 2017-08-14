@@ -82,31 +82,41 @@ function updatePolicy_1(connection, data, res){
 
 function updateSign(connection, lat, lng, id, bool){
 	var sqlQuery;
+	var newDate = new Date();
 
 	if(bool){
 		sqlQuery = "UPDATE mainsigns set latitude=?,longitude=?,"+
-		"reportCount = reportCount + 1, confidenceLevel = confidenceLevel + 0.01"+
-		" WHERE signID = ? ";
+		"reportCount = reportCount + 1, confidenceLevel = confidenceLevel + 0.01,"+
+		"date = ? WHERE signID = ? ";
+
+		connection.query(sqlQuery,[lat,lng, newDate, id], function(err, rows)
+	    {
+
+	      if (err)
+	          console.log("Error Updating : %s ",err );
+	     
+	    });
 	}
 	else{
 		sqlQuery = "UPDATE mainsigns set latitude=?,longitude=?,"+
 		"confidenceLevel = confidenceLevel - 0.01"+
 		" WHERE signID = ? ";
+
+		connection.query(sqlQuery,[lat,lng, id], function(err, rows)
+	    {
+
+	      if (err)
+	          console.log("Error Updating : %s ",err );
+	     
+	    });
 	}
-
-	connection.query(sqlQuery,[lat,lng,id], function(err, rows)
-    {
-
-      if (err)
-          console.log("Error Updating : %s ",err );
-     
-    });
 }
 
 function insertExtraSign(connection, data){
-	var sql = "INSERT INTO extrasigns (extraSignName, extraDate, extraReportCount, mainSignID) VALUES ? ON DUPLICATE KEY UPDATE extraReportCount=extraReportCount+1";
+	var newDate = new Date();
+	var sql = "INSERT INTO extrasigns (extraSignName, extraDate, extraReportCount, mainSignID) VALUES ? ON DUPLICATE KEY UPDATE extraReportCount=extraReportCount+1, extraDate = ?";
 
-	connection.query(sql,[data], function(err, rows)
+	connection.query(sql,[data, newDate], function(err, rows)
     {
 
       if (err)
@@ -187,7 +197,7 @@ function insertOrUpdate(connection, data, results, res){
 	    	
 	    	//If lower than 5 meters,...
 	    	if(distance < 5){
-	    		//...  sign is updated in the repository
+	    		//... sign is updated in the repository
 	    		if(signName === results[i].signName){
 		    		console.log("\nDISTANCE: " + distance + " meters\n");
 		    		newLat = (Lat + actLat)/2;
