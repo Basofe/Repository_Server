@@ -16,7 +16,8 @@
                     <th>Report Count</th>
                     <th>Date</th>
                     <th>Status</th>
-                    <th width="120px">Action</th>
+                    <th>Type</th>
+                    <th width="120px">Other Entries</th>
                 </tr>
                                
                 <% if(data.length){ 
@@ -33,6 +34,7 @@
                     <td><%=data[i].reportCount%></td>
                     <td><%=data[i].date%></td>
                     <td><%=data[i].status%></td>
+                    <td><%=data[i].type%></td>
                     <td>
                         <a class="a-inside edit" href="../extraSigns/<%=data[i].signID%>">Extra Signs</a>
                        

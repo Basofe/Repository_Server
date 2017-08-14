@@ -45,8 +45,6 @@ exports.list_extrasigns = function(req, res){
   
 };
 
-var crg = require('city-reverse-geocoder');
-
 /*****************************************************
  *                  Update Policy 1                  *
  *****************************************************/
@@ -98,11 +96,11 @@ function updateSign(connection, lat, lng, id, bool){
 	    });
 	}
 	else{
-		sqlQuery = "UPDATE mainsigns set latitude=?,longitude=?,"+
+		sqlQuery = "UPDATE mainsigns set "+
 		"confidenceLevel = confidenceLevel - 0.01"+
 		" WHERE signID = ? ";
 
-		connection.query(sqlQuery,[lat,lng, id], function(err, rows)
+		connection.query(sqlQuery,[id], function(err, rows)
 	    {
 
 	      if (err)
@@ -114,7 +112,7 @@ function updateSign(connection, lat, lng, id, bool){
 
 function insertExtraSign(connection, data){
 	var newDate = new Date();
-	var sql = "INSERT INTO extrasigns (extraSignName, extraDate, extraReportCount, mainSignID) VALUES ? ON DUPLICATE KEY UPDATE extraReportCount=extraReportCount+1, extraDate = ?";
+	var sql = "INSERT INTO extrasigns (extraSignName, extraDate, extraReportCount, extraType, mainSignID) VALUES ? ON DUPLICATE KEY UPDATE extraReportCount=extraReportCount+1, extraDate = ?";
 
 	connection.query(sql,[data, newDate], function(err, rows)
     {
@@ -177,7 +175,7 @@ function insertOrUpdate(connection, data, results, res){
     var actLng;
     var Lat;
     var Lng;
-    var signName;
+    var signName, type;
     var flag = 0;
 
     var data_N = data.length;
@@ -188,6 +186,7 @@ function insertOrUpdate(connection, data, results, res){
 		actLat = parseFloat(data[j].latitude);
     	actLng = parseFloat(data[j].longitude);
 		signName = data[j].name;
+		type = data[j].type;
 
     	//Verify each item for all signs in the repository (in a certain area)
 	    for(var i=0; i<results_N && flag == 0; i++){
@@ -198,7 +197,7 @@ function insertOrUpdate(connection, data, results, res){
 	    	//If lower than 5 meters,...
 	    	if(distance < 5){
 	    		//... sign is updated in the repository
-	    		if(signName === results[i].signName){
+	    		if(signName === results[i].signName && type === results[i].type){
 		    		console.log("\nDISTANCE: " + distance + " meters\n");
 		    		newLat = (Lat + actLat)/2;
 		    		newLng = (Lng + actLng)/2;
@@ -206,33 +205,35 @@ function insertOrUpdate(connection, data, results, res){
 		    		console.log("-------------------");
 		    		console.log("SIGN " + results[i].signID + " UPDATED!");
 		    		console.log("-------------------\n");
+		    		flag = 1;
 	    		}
 	    		//... extra sign is inserted or updated in the repository
-	    		else{
-	    			newLat = (Lat + actLat)/2;
-	    			newLng = (Lng + actLng)/2;
-
+	    		else if (signName !== results[i].signName && type === results[i].type){
 		    		var created2 = new Date();
 
 		            var extraSign = [  
 		                signName,
 		                created2,
 		                1,
+		                data[j].type,
 		                results[i].signID
 		            ];
 
 		            extraValues.push(extraSign);
 
 	    			insertExtraSign(connection, extraValues);
-	    			updateSign(connection, newLat, newLng, results[i].signID, false);
+	    			updateSign(connection, 0, 0, results[i].signID, false);
 	    			extraValues.pop();
 
 	    			console.log("----------------------");
 		    		console.log("EXTRA SIGN " + results[i].signID + " INSERTED!");
 		    		console.log("----------------------\n");
+		    		flag = 1;
+	    		}
+	    		else{
+	    			flag = 0;
 	    		}
 
-	    		flag = 1;
 	    	}
 
 	    //Else a new sign is inserted
@@ -250,7 +251,8 @@ function insertOrUpdate(connection, data, results, res){
                 0.5,
                 1,
                 created,
-                "OK"
+                "OK",
+                index.type
             ];
 
     		insertValues.push(newSign);
@@ -265,7 +267,7 @@ function insertOrUpdate(connection, data, results, res){
     if(insertValues.length != 0){
    		console.log("SIZE: " + insertValues.length);
 
-	    var sql = "INSERT INTO mainsigns (latitude, longitude, signName, orientation, confidenceLevel, reportCount, date, status) VALUES ? ";
+	    var sql = "INSERT INTO mainsigns (latitude, longitude, signName, orientation, confidenceLevel, reportCount, date, status, type) VALUES ? ";
 	    var query = connection.query(sql, [insertValues], function(err, rows)
 	    {
 
