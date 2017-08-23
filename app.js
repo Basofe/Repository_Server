@@ -46,7 +46,8 @@ app.use(
       host     : 'localhost',
       user     : 'root',
       password : '12345',
-      database : 'communitydb'
+      database : 'communitydb',
+      multipleStatements: true
 
     },'pool') //or single
 

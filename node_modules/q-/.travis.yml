@@ -1,0 +1,52 @@
+language: node_js
+sudo: false
+env:
+  matrix:
+    - CI=true TRAVIS=true
+
+
+## blacklist
+#branches:
+#  except:
+#    - legacy
+#    - experimental
+#
+## whitelist
+#branches:
+#  only:
+#    - master
+#    - stable
+
+
+#before_install
+#install
+#before_script
+#script
+#after_success or after_failure
+#after_script
+#before_deploy
+#deploy
+#after_deploy
+
+node_js:
+  - "iojs"
+  - "iojs-v1.7"
+  - "iojs-v1.6"
+  - "iojs-v1.5"
+  - "iojs-v1.4"
+  - "iojs-v1.3"
+  - "iojs-v1.2"
+  - "iojs-v1.1"
+  - "iojs-v1.0"
+  - "0.12"
+  - "0.11"
+  - "0.10"
+after_script:
+  - npm run coveralls
+
+notifications:
+  email:
+    recipients:
+      - qiuzhongleiabc@126.com
+    #on_success: [always|never|change] # default: change
+    #on_failure: [always|never|change] # default: always

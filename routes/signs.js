@@ -2,7 +2,7 @@
  * GET users listing.
  */
 
-var sqlQuery = "SELECT * FROM mainsigns WHERE acos(sin(? * 0.0175) * sin(latitude * 0.0175) + cos(? * 0.0175) * cos(latitude * 0.0175) * cos(longitude * 0.0175 - (? * 0.0175))) * 6371 <= 30";
+var sqlQuery = "SELECT * FROM mainsigns WHERE acos(sin(? * 0.0175) * sin(latitude * 0.0175) + cos(? * 0.0175) * cos(latitude * 0.0175) * cos(longitude * 0.0175 - (? * 0.0175))) * 6371 <= 50";
 
 exports.list_signs = function(req, res){
 
@@ -49,7 +49,7 @@ exports.list_extrasigns = function(req, res){
  *                  Update Policy 1                  *
  *****************************************************/
 
-function updatePolicy_1(connection, data, res){
+function updatePolicy_1(connection, data, extraResults, res){
 
 	var results;
 
@@ -66,7 +66,7 @@ function updatePolicy_1(connection, data, res){
 
         results = JSON.parse(results);
 
-        insertOrUpdate(connection, data, results, res);
+        insertOrUpdate(connection, data, results, extraResults, res);
 
         res.redirect('/');
        
@@ -111,17 +111,68 @@ function updateSign(connection, lat, lng, id, bool){
 }
 
 function insertExtraSign(connection, data){
-	var newDate = new Date();
-	var sql = "INSERT INTO extrasigns (extraSignName, extraDate, extraReportCount, extraType, mainSignID) VALUES ? ON DUPLICATE KEY UPDATE extraReportCount=extraReportCount+1, extraDate = ?";
+	var sql = "INSERT INTO extrasigns (extraSignName, extraDate, extraReportCount, extraType, mainSignID)" + 
+	" VALUES ?"; 
+	//ON DUPLICATE KEY UPDATE extraReportCount = IF(VALUES(mainSignID) = mainSignID, extraReportCount+1, extraReportCount)";
+	//"extraDate = IF(mainSignID = ?, ?, 0)";
 
-	connection.query(sql,[data, newDate], function(err, rows)
+	connection.query(sql,[data], function(err, rows)
     {
-
       if (err)
           console.log("Error Inserting : %s ",err );
      
     });
 }
+
+function updateExtraSign(connection, extraID, extraName){
+	var newDate = new Date();
+	var sql = "UPDATE extrasigns set "+
+		"extraReportCount = extraReportCount + 1, extraDate = ?"+
+		" WHERE mainSignID = ? AND extraSignName = ?";
+
+	connection.query(sql,[newDate, extraID, extraName], function(err, rows)
+    {
+      if (err)
+          console.log("Error Inserting : %s ",err );
+     
+    });
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+function updateSigns(connection, data, bool){
+	var sqlQuery;
+
+	if(bool){
+		sqlQuery = "UPDATE mainsigns set latitude=?,longitude=?,"+
+		"reportCount = reportCount + 1, confidenceLevel = confidenceLevel + 0.01"+
+		", date=? WHERE signID = ? ";
+
+		connection.query(sqlQuery,[data.latitude, data.longitude, data.date, data.signID], function(err, rows)
+	    {
+
+	      if (err)
+	          console.log("Error Updating : %s ",err );
+	     
+	    });
+	}
+	else{
+		sqlQuery = "UPDATE mainsigns set "+
+		"confidenceLevel = confidenceLevel - 0.01"+
+		" WHERE signID = ? ";
+
+		connection.query(sqlQuery,[data], function(err, rows)
+	    {
+
+	      if (err)
+	          console.log("Error Updating : %s ",err );
+	     
+	    });
+	}
+}
+
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
 
 function toRadians(degrees) {
   return degrees * Math.PI / 180;
@@ -162,12 +213,17 @@ function Spherical_Law_of_Cosines(lat1, lon1, lat2, lon2){
 /*****************************************************
  *    Decide if executes an Insert or Update query   *
  *****************************************************/
+
+var mysql = require('mysql');
+var Q = require('kew');
  
-function insertOrUpdate(connection, data, results, res){
+function insertOrUpdate(connection, data, results, extraResults, res){
     var pointTo;
 
     var insertValues = [];
     var extraValues = [];
+    var extraIDs = [];
+    var extraNames = [];
     var updateValues = [];
     var newLat;
     var newLng;
@@ -177,9 +233,12 @@ function insertOrUpdate(connection, data, results, res){
     var Lng;
     var signName, type;
     var flag = 0;
+    var flag2 = 0;
+    var counter = 0;
 
     var data_N = data.length;
     var results_N = results.length;
+    var extraResults_N = extraResults.length;
 
     for(var j=0; j<data_N; j++){
     	//Create point for each item from data array 
@@ -201,12 +260,24 @@ function insertOrUpdate(connection, data, results, res){
 		    		console.log("\nDISTANCE: " + distance + " meters\n");
 		    		newLat = (Lat + actLat)/2;
 		    		newLng = (Lng + actLng)/2;
-		    		updateSign(connection, newLat, newLng, results[i].signID, true);
+		    		var newDate = new Date();
+
+		    		var Sign = [
+		    			newLat,
+		    			newLng,
+		    			newDate,
+		    			results[i].signID
+		    		];
+
+		    		updateValues.push(Sign);
+
+		    		//updateSign(connection, newLat, newLng, results[i].signID, true);
+
 		    		console.log("-------------------");
 		    		console.log("SIGN " + results[i].signID + " UPDATED!");
 		    		console.log("-------------------\n");
 		    		flag = 1;
-	    		}
+		    	}
 	    		//... extra sign is inserted or updated in the repository
 	    		else if (signName !== results[i].signName && type === results[i].type){
 		    		var created2 = new Date();
@@ -219,11 +290,35 @@ function insertOrUpdate(connection, data, results, res){
 		                results[i].signID
 		            ];
 
-		            extraValues.push(extraSign);
+		            var extraID = [
+		            	results[i].signID
+		            ];
 
-	    			insertExtraSign(connection, extraValues);
-	    			updateSign(connection, 0, 0, results[i].signID, false);
-	    			extraValues.pop();
+		            var extraName = [
+		            	signName
+		            ];
+
+		            if(extraResults_N !=0){
+			            for(var k=0; k<extraResults_N && flag2 == 0; k++){
+			            	if(extraResults[k].extraSignName === signName && extraResults[k].mainSignID === results[i].signID){
+				            	extraIDs.push(extraID);
+				            	extraNames.push(extraName);
+				            	updateExtraSign(connection,extraIDs,extraNames);
+				            	extraNames.pop();
+				            	extraIDs.pop();
+				            	updateSign(connection, 0, 0, results[i].signID, false);
+				            	flag = 1;
+				            }
+			        	}
+			        	if(flag == 0){
+			        		extraValues.push(extraSign);
+			        		updateSign(connection, 0, 0, results[i].signID, false);
+			        	}
+			        }
+			        else{
+			     		extraValues.push(extraSign);
+			     		updateSign(connection, 0, 0, results[i].signID, false);
+			        }
 
 	    			console.log("----------------------");
 		    		console.log("EXTRA SIGN " + results[i].signID + " INSERTED!");
@@ -264,6 +359,23 @@ function insertOrUpdate(connection, data, results, res){
     	flag = 0;	    
     }
 
+    if(extraValues.length != 0){
+    	//insertExtraSign(connection, extraValues, extraIDs, extraNames);
+    }
+
+    if(updateValues.length != 0){
+    	var defer = Q.defer()
+	    var queries = '';
+
+		updateValues.forEach(function (item) {
+		  queries += mysql.format("UPDATE mainsigns set latitude=?, longitude=?, "+
+					"reportCount = reportCount + 1, confidenceLevel = confidenceLevel + 0.01"+
+					", date=? WHERE signID = ? ; ", item);
+		});
+
+		connection.query(queries, defer.makeNodeResolver());
+    }
+
     if(insertValues.length != 0){
    		console.log("SIZE: " + insertValues.length);
 
@@ -280,6 +392,8 @@ function insertOrUpdate(connection, data, results, res){
 	else{
 		console.log("SIZE: " + insertValues.length);
 	}
+
+	//console.log("COUNTER: " + data_N + " | " + results_N);
 }
 
 var counter = 0;
@@ -287,13 +401,25 @@ var counter = 0;
 /*Save sign*/
 exports.add_sign = function(req,res){
 
-    //console.log(req.body);
-
     var jsonData = req.body;
+
+    var extraResults;
     
     req.getConnection(function (err, connection) {
 
-    	updatePolicy_1(connection, jsonData, res);
+    	var select = connection.query("SELECT * FROM extrasigns ", function(err,rows)
+	    {
+	        
+	        if(err)
+	            console.log("Error Selecting : %s ",err );
+
+	        extraResults = JSON.stringify(rows);
+
+        	extraResults = JSON.parse(extraResults);
+
+        	updatePolicy_1(connection, jsonData, extraResults, res);
+	 
+		});
 	
 	});
 };
